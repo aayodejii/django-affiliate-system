@@ -27,7 +27,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "Django>=4.0,<5.2",
+    "Django>=4.0,<5.2.7",
     "djangorestframework>=3.14.0",
     "djangorestframework-simplejwt>=5.2.0",
 ]
