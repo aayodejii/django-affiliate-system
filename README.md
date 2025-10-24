@@ -309,7 +309,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 Email: your.email@example.com
+- 📧 Email: aayodeji.f@gmail.com
 - 🐛 Issues: [GitHub Issues](https://github.com/aayodejii/django-affiliate-system/issues)
 - 📖 Documentation: [Read the Docs](https://django-affiliate-system.readthedocs.io/)
 
@@ -320,4 +320,5 @@ See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
 ## Credits
 
 Created and maintained by [Ayodeji Akenroye](https://github.com/aayodejii).
+
 # django-affiliate-system
