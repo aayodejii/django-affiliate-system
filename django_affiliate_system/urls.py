@@ -19,18 +19,17 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register(r"tenants", TenantViewSet)
 # router.register(r"affiliates", AffiliateViewSet)
-router.register(r"affiliates", AffiliateViewSet, basename="affiliates")
-
+router.register(r"", AffiliateViewSet, basename="affiliates")
+router.register(r"tenants", TenantViewSet)
 router.register(r"referral-links", ReferralLinkViewSet, basename="referral-links")
 router.register(r"referral-actions", ReferralActionViewSet, basename="referral-actions")
-router.register(r"commissions", CommissionViewSet, basename="commissions")
 router.register(r"payouts", PayoutViewSet, basename="payouts")
+router.register(r"commissions", CommissionViewSet, basename="commissions")
 router.register(r"commission-rules", CommissionRuleViewSet, basename="commission-rules")
 
 urlpatterns = [
-    path("api/", include(router.urls)),
+    path("affiliates/", include(router.urls)),
     path("debug/", SimpleDebugView.as_view(), name="debug-view"),
     path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
