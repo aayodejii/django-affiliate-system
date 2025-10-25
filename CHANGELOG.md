@@ -33,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT and API key authentication
 - Hybrid authentication system
 - Multi-touch attribution (first-click, last-click)
-- Google Calendar integration (optional)
 - Celery task support (optional)
 - Comprehensive admin interface
 - CORS middleware
@@ -60,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Django REST Framework integration
 - PostgreSQL/MySQL/SQLite compatible
 - Optional Celery for async tasks
-- Optional Google Calendar integration
 
 ### Documentation
 

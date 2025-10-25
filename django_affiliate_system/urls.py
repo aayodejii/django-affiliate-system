@@ -10,7 +10,6 @@ from .views import (
     CommissionRuleViewSet,
     CommissionViewSet,
     EnhancedTrackingView,
-    GoogleCalendarWebhook,
     PayoutViewSet,
     ReferralActionViewSet,
     ReferralLinkViewSet,

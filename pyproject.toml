@@ -67,8 +67,6 @@ dev = [
     "faker>=18.0.0",
 ]
 all = [
-    "google-auth>=2.0.0",
-    "google-api-python-client>=2.0.0",
     "celery>=5.2.0",
     "redis>=4.5.0",
 ]

@@ -279,3 +279,4 @@ django_affiliate_system/media/
 .envs/.local/*
 
 example_project/
+quickref.md

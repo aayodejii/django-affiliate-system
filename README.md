@@ -17,7 +17,6 @@ A comprehensive, production-ready Django affiliate marketing and referral tracki
 - 📱 **Session Tracking** - Multi-touch attribution models
 - 🎨 **RESTful API** - Complete REST API with Django REST Framework
 - 🔔 **Webhook Support** - External conversion tracking
-- 📅 **Google Calendar Integration** (Optional)
 - ⚡ **Celery Task Support** (Optional)
 
 ## Requirements
@@ -37,8 +36,6 @@ pip install django-affiliate-system
 ### With Optional Dependencies
 
 ```bash
-# With Google Calendar support
-pip install django-affiliate-system[calendar]
 
 # With Celery support
 pip install django-affiliate-system[celery]
@@ -95,8 +92,6 @@ AFFILIATE_SYSTEM = {
         'http://localhost:3000',
         'https://yourdomain.com',
     ],
-    'ENABLE_GOOGLE_CALENDAR': False,
-    'GOOGLE_CALENDAR_CREDENTIALS': None,
 }
 ```
 

@@ -19,7 +19,6 @@ class DjangoAffiliateSystemConfig(AppConfig):
             "DOMAIN": "localhost",
             "DEFAULT_COMMISSION_RATE": 10.0,
             "COOKIE_DURATION_DAYS": 30,
-            "ENABLE_GOOGLE_CALENDAR": False,
             "ALLOWED_CORS_ORIGINS": [],
         }
         for key, default_value in defaults.items():

@@ -5,46 +5,6 @@ from django.contrib import admin
 from django.db.models import CharField, TextField
 from django.http import HttpResponse
 
-# from google.oauth2 import service_account
-# from googleapiclient.discovery import build
-
-
-# # === Google Calendar Webhook Setup ===
-# SERVICE_ACCOUNT_FILE = "files/nextrole-464005-8b675d286f10.json"
-# CALENDAR_ID = "tcpwebmaster9@gmail.com"  # Or your specific calendar ID
-# WEBHOOK_URL = "https://c7eb-105-112-193-58.ngrok-free.app/webhooks/google-calendar/"  # Must be HTTPS!
-
-
-# def setup_webhook():
-#     credentials = service_account.Credentials.from_service_account_file(
-#         SERVICE_ACCOUNT_FILE,
-#         scopes=["https://www.googleapis.com/auth/calendar"],
-#     )
-
-#     service = build("calendar", "v3", credentials=credentials)
-
-#     channel = (
-#         service.events()
-#         .watch(
-#             calendarId=CALENDAR_ID,
-#             body={
-#                 "id": "nextrole-channel-123aba3",
-#                 "type": "web_hook",
-#                 "address": WEBHOOK_URL,
-#                 "params": {"ttl": "604800"},  # 7 days expiration
-#             },
-#         )
-#         .execute()
-#     )
-
-#     print(f"Webhook set up! Channel ID: {channel['id']}")
-#     print(f"Resource ID: {channel['resourceId']}")
-#     # SAVE THESE TWO IDs - you'll need them later
-
-
-# if __name__ == "__main__":
-#     setup_webhook()
-
 
 # === Django Admin Utilities ===
 class ExportCsvMixin:
