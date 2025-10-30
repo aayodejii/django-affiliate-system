@@ -1,43 +1,37 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
 
 from .views import (
     AffiliateViewSet,
     CommissionRuleViewSet,
     CommissionViewSet,
-    EnhancedTrackingView,
     PayoutViewSet,
     ReferralActionViewSet,
+    ReferralLinkRedirectView,
     ReferralLinkViewSet,
     SimpleDebugView,
     TenantViewSet,
 )
 
+# Create router for viewsets
 router = DefaultRouter()
-# router.register(r"affiliates", AffiliateViewSet)
-router.register(r"", AffiliateViewSet, basename="affiliates")
-router.register(r"tenants", TenantViewSet)
+router.register(r"affiliates", AffiliateViewSet, basename="affiliates")
 router.register(r"referral-links", ReferralLinkViewSet, basename="referral-links")
 router.register(r"referral-actions", ReferralActionViewSet, basename="referral-actions")
-router.register(r"payouts", PayoutViewSet, basename="payouts")
 router.register(r"commissions", CommissionViewSet, basename="commissions")
+router.register(r"payouts", PayoutViewSet, basename="payouts")
 router.register(r"commission-rules", CommissionRuleViewSet, basename="commission-rules")
+router.register(r"tenants", TenantViewSet, basename="tenants")
 
+# URL patterns
 urlpatterns = [
-    path("affiliates/", include(router.urls)),
-    path("debug/", SimpleDebugView.as_view(), name="debug-view"),
-    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    # Webhook for external conversions
-    path(
-        "api/webhook/conversion/",
-        ReferralActionViewSet.as_view({"post": "convert"}),
-        name="conversion-webhook",
-    ),
-    path("api/track/", EnhancedTrackingView.as_view(), name="enhanced-tracking"),
-    # path('api/analytics/', analytics_dashboard, name='analytics-dashboard'),
+    # Router URLs
+    path("", include(router.urls)),
+    # Referral link redirect handler (short URL)
+    path("r/<slug:slug>/", ReferralLinkRedirectView.as_view(), name="referral-redirect"),
+    # Debug endpoint (for testing authentication)
+    path("debug/", SimpleDebugView.as_view(), name="debug"),
 ]
+
+# Optional: Add app_name for namespacing
+app_name = "django_affiliate_system"

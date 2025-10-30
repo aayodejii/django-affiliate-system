@@ -1,9 +1,9 @@
 import re
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from .config import get_config
 from .models import (
     Affiliate,
     Commission,
@@ -11,47 +11,55 @@ from .models import (
     Payout,
     ReferralAction,
     ReferralLink,
-    ReferralSession,
     Tenant,
 )
-
-User = get_user_model()
 
 
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
-        fields = ["id", "name", "slug", "created_at", "default_commission_rate"]
-        read_only_fields = ["slug", "created_at"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "subdomain",
+            "destination_url",
+            "created_at",
+            "default_commission_rate",
+            "cookie_duration_days",
+            "is_active",
+        ]
+        read_only_fields = ["created_at", "owner"]
 
 
 class AffiliateSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(
-        read_only=True, default=serializers.CurrentUserDefault()
-    )
-    tenant = serializers.PrimaryKeyRelatedField(read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True, allow_null=True)
 
     class Meta:
         model = Affiliate
         fields = [
             "id",
             "tenant",
+            "tenant_name",
             "user",
+            "user_email",
             "code",
             "is_active",
             "balance",
             "payout_threshold",
             "payout_method",
+            "joined_at",
         ]
-        read_only_fields = ["code", "balance", "user", "tenant"]
+        read_only_fields = ["code", "balance", "user", "tenant", "joined_at"]
 
 
 class ReferralLinkSerializer(serializers.ModelSerializer):
     full_url = serializers.SerializerMethodField()
-    destination_url = serializers.SerializerMethodField()
+    affiliate_code = serializers.CharField(source="affiliate.code", read_only=True)
+
+    # Statistics (optional - can be expensive)
     total_clicks = serializers.SerializerMethodField()
-    total_signups = serializers.SerializerMethodField()
-    total_page_views = serializers.SerializerMethodField()
     total_conversions = serializers.SerializerMethodField()
     conversion_rate = serializers.SerializerMethodField()
 
@@ -60,90 +68,79 @@ class ReferralLinkSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "affiliate",
+            "affiliate_code",
             "slug",
             "destination_url",
             "full_url",
+            "campaign_name",
+            "notes",
             "is_active",
             "created_at",
             "total_clicks",
-            "total_page_views",
-            "total_signups",
             "total_conversions",
             "conversion_rate",
         ]
-        read_only_fields = fields  # All fields are read-only
-
-    # def get_full_url(self, obj):
-    #     request = self.context.get("request")
-    #     return (
-    #         f"{settings.DOMAIN_PROTOCOL}://{settings.DOMAIN}/?ref={obj.slug}"
-    #         if request
-    #         else None
-    #     )
+        read_only_fields = ["created_at", "affiliate"]
 
     def get_full_url(self, obj):
-        config = settings.AFFILIATE_SYSTEM
-        return f"{config['DOMAIN_PROTOCOL']}://{config['DOMAIN']}/?ref={obj.slug}"
+        """Generate full referral URL"""
+        config = get_config()
+        protocol = config.get("DOMAIN_PROTOCOL", "https")
+        domain = config.get("DOMAIN", "localhost:8000")
+        return f"{protocol}://{domain}/?ref={obj.slug}"
 
-    def get_destination_url(self, obj):
-        return obj.affiliate.tenant.destination_url
+    def _get_actions(self, obj):
+        """Helper to get actions for stats (with caching)"""
+        if not hasattr(self, "_actions_cache"):
+            self._actions_cache = {}
 
-    def _get_filtered_actions(self, obj, filters):
-        """Helper method to get filtered actions for the link"""
-        request = self.context.get("request")
-        if not request:
-            return ReferralAction.objects.none()
+        if obj.id not in self._actions_cache:
+            # Get date range from context if provided
+            request = self.context.get("request")
+            queryset = ReferralAction.objects.filter(referral_link=obj)
 
-        queryset = ReferralAction.objects.filter(referral_link=obj, **filters)
+            if request and (start_date := request.query_params.get("start_date")):
+                end_date = request.query_params.get("end_date")
+                if end_date:
+                    queryset = queryset.filter(timestamp__range=[start_date, end_date])
 
-        if start_date := request.query_params.get("start_date"):
-            end_date = request.query_params.get("end_date")
-            if end_date:
-                queryset = queryset.filter(timestamp__range=[start_date, end_date])
+            self._actions_cache[obj.id] = queryset
 
-        return queryset
+        return self._actions_cache[obj.id]
 
     def get_total_clicks(self, obj):
-        return self._get_filtered_actions(obj, {"action_type": "click"}).count()
-
-    def get_total_signups(self, obj):
-        return self._get_filtered_actions(obj, {"action_type": "signup"}).count()
-
-    def get_total_page_views(self, obj):
-        return self._get_filtered_actions(obj, {"action_type": "page_view"}).count()
+        return self._get_actions(obj).filter(action_type="click").count()
 
     def get_total_conversions(self, obj):
-        return self._get_filtered_actions(obj, {"is_converted": True}).count()
+        return self._get_actions(obj).filter(is_converted=True).count()
 
     def get_conversion_rate(self, obj):
         clicks = self.get_total_clicks(obj)
         conversions = self.get_total_conversions(obj)
-        return (conversions / clicks * 100) if clicks > 0 else 0
+        return round((conversions / clicks * 100), 2) if clicks > 0 else 0
 
     def validate_slug(self, value):
         """
-        Ensure slug is unique within the tenant and validate format
-        Now allows capital letters but preserves case sensitivity
+        Validate slug format and uniqueness.
+        Allows letters, numbers, and hyphens.
         """
         instance = getattr(self, "instance", None)
 
-        # If we're updating and slug hasn't changed, no validation needed
+        # If updating and slug hasn't changed, skip validation
         if instance and instance.slug == value:
             return value
 
-        tenant = self.context["request"].tenant
-        if not tenant:
-            raise serializers.ValidationError("Tenant context required")
-
-        # Validate slug format - now allows A-Z, a-z, 0-9, and hyphens
+        # Validate format (alphanumeric and hyphens only)
         if not re.match(r"^[A-Za-z0-9-]+$", value):
-            raise serializers.ValidationError(
-                "Slug can only contain letters (A-Z, a-z), numbers, and hyphens"
-            )
+            raise serializers.ValidationError("Slug can only contain letters, numbers, and hyphens")
 
-        # Check uniqueness within tenant (case-sensitive)
+        # Check length
+        if len(value) < 3:
+            raise serializers.ValidationError("Slug must be at least 3 characters long")
+
+        # Check uniqueness (globally unique)
         if (
-            ReferralLink.objects.filter(slug=value, affiliate__tenant=tenant)
+            ReferralLink.objects.filter(slug=value)
             .exclude(pk=getattr(instance, "pk", None))
             .exists()
         ):
@@ -151,88 +148,95 @@ class ReferralLinkSerializer(serializers.ModelSerializer):
 
         return value
 
-
-# class ReferralLinkSerializer(serializers.ModelSerializer):
-#     full_url = serializers.SerializerMethodField()
-#     destination_url = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = ReferralLink
-#         fields = ["id", "affiliate", "slug", "destination_url", "full_url", "is_active"]
-#         read_only_fields = [
-#             "slug",
-#             "affiliate",
-#         ]
-
-#     def get_full_url(self, obj):
-#         request = self.context.get("request")
-#         return request.build_absolute_uri(f"/r/{obj.slug}") if request else None
-
-#     def get_destination_url(self, obj):
-#         return obj.affiliate.tenant.destination_url
-#         # return "https://testurl.com"
-#         # request = self.context.get("request")
-#         # return request.build_absolute_uri(f"/r/{obj.slug}") if request else None
+    def validate_destination_url(self, value):
+        """Validate destination URL format"""
+        if not value.startswith(("http://", "https://")):
+            raise serializers.ValidationError("Destination URL must start with http:// or https://")
+        return value
 
 
 class ReferralActionSerializer(serializers.ModelSerializer):
+    referral_link_slug = serializers.CharField(source="referral_link.slug", read_only=True)
+    affiliate_code = serializers.CharField(source="referral_link.affiliate.code", read_only=True)
+
     class Meta:
         model = ReferralAction
         fields = [
             "id",
-            "tenant",
             "referral_link",
+            "referral_link_slug",
+            "affiliate_code",
             "action_type",
             "timestamp",
             "converted_at",
             "conversion_value",
             "is_converted",
+            "session_id",
+            "metadata",
         ]
-        read_only_fields = ["tenant", "timestamp"]
+        read_only_fields = [
+            "timestamp",
+            "referral_link",
+            "converted_at",
+            "session_id",
+        ]
 
 
 class CommissionSerializer(serializers.ModelSerializer):
-    referral_action_type = serializers.CharField(
-        source="referral_action.action_type", read_only=True
-    )
+    affiliate_code = serializers.CharField(source="affiliate.code", read_only=True)
+    action_type = serializers.CharField(source="referral_action.action_type", read_only=True)
 
     class Meta:
         model = Commission
         fields = [
             "id",
             "affiliate",
+            "affiliate_code",
             "referral_action",
-            "referral_action_type",
+            "action_type",
             "amount",
             "rate",
             "calculated_at",
             "status",
         ]
-        read_only_fields = ["amount", "rate", "calculated_at"]
+        read_only_fields = ["amount", "rate", "calculated_at", "affiliate"]
 
 
 class PayoutSerializer(serializers.ModelSerializer):
+    affiliate_code = serializers.CharField(source="affiliate.code", read_only=True)
+
     class Meta:
         model = Payout
         fields = [
             "id",
             "tenant",
             "affiliate",
+            "affiliate_code",
             "amount",
             "status",
             "created_at",
             "processed_at",
             "method",
+            "reference",
         ]
-        read_only_fields = ["tenant", "created_at", "processed_at"]
+        read_only_fields = [
+            "tenant",
+            "created_at",
+            "processed_at",
+            "reference",
+            "affiliate",
+        ]
 
 
 class CommissionRuleSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True, allow_null=True)
+
     class Meta:
         model = CommissionRule
         fields = [
             "id",
             "tenant",
+            "tenant_name",
             "name",
             "action_type",
             "is_percentage",
@@ -240,10 +244,45 @@ class CommissionRuleSerializer(serializers.ModelSerializer):
             "min_value",
             "max_value",
             "is_active",
+            "priority",
         ]
+        read_only_fields = ["tenant"]
+
+    def validate(self, data):
+        """Validate commission rule values"""
+        if data.get("is_percentage"):
+            value = data.get("value", 0)
+            if value < 0 or value > 100:
+                raise serializers.ValidationError("Percentage value must be between 0 and 100")
+
+            # Validate min/max if provided
+            min_val = data.get("min_value")
+            max_val = data.get("max_value")
+
+            if min_val is not None and max_val is not None:
+                if min_val > max_val:
+                    raise serializers.ValidationError("min_value cannot be greater than max_value")
+
+        return data
 
 
-class ReferralSessionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReferralSession
-        fields = "__all__"
+class TrackingEventSerializer(serializers.Serializer):
+    """Serializer for tracking endpoint requests"""
+
+    referral_code = serializers.CharField(required=False, allow_blank=True)
+    referral_slug = serializers.CharField(required=False, allow_blank=True)
+    event_type = serializers.CharField(default="click")
+    conversion_value = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default=0
+    )
+    is_conversion = serializers.BooleanField(default=False)
+    session_id = serializers.CharField(required=False, allow_blank=True)
+    use_sessions = serializers.BooleanField(default=False)
+    attribution_model = serializers.CharField(default="last_click")
+    metadata = serializers.JSONField(required=False, default=dict)
+
+    def validate(self, data):
+        """Ensure either referral_code or referral_slug is provided"""
+        if not data.get("referral_code") and not data.get("referral_slug"):
+            raise serializers.ValidationError("Either referral_code or referral_slug is required")
+        return data

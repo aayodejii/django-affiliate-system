@@ -1,6 +1,6 @@
 """Version information for django-affiliate-system."""
 
-__version__ = "0.1.0a3"
+__version__ = "0.1.0a4"
 __title__ = "django-affiliate-system"
 __description__ = "A comprehensive Django affiliate marketing and referral tracking system"
 __author__ = "Ayodeji Akenroye"

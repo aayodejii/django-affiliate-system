@@ -8,20 +8,33 @@ class DjangoAffiliateSystemConfig(AppConfig):
     verbose_name = "Django Affiliate System"
 
     def ready(self):
+        """Initialize app when Django starts"""
+        # Import signals
         from . import signals  # noqa
 
+        # Validate settings
         self.validate_settings()
 
     def validate_settings(self):
-        affiliate_settings = getattr(settings, "AFFILIATE_SYSTEM", {})
-        defaults = {
-            "DOMAIN_PROTOCOL": "https",
-            "DOMAIN": "localhost",
-            "DEFAULT_COMMISSION_RATE": 10.0,
-            "COOKIE_DURATION_DAYS": 30,
-            "ALLOWED_CORS_ORIGINS": [],
-        }
-        for key, default_value in defaults.items():
-            if key not in affiliate_settings:
-                affiliate_settings[key] = default_value
-        settings.AFFILIATE_SYSTEM = affiliate_settings
+        """Validate and set default configuration"""
+        from .config import get_config, validate_config
+
+        try:
+            # This will validate required settings
+            validate_config()
+
+            # Ensure settings are accessible
+            config = get_config()
+
+            # Set on settings for easy access
+            settings.AFFILIATE_SYSTEM = config
+
+        except ValueError as e:
+            import warnings
+
+            warnings.warn(
+                f"Django Affiliate System configuration error: {e}. "
+                "Using defaults for development. "
+                "Please configure AFFILIATE_SYSTEM in settings.py for production.",
+                RuntimeWarning,
+            )

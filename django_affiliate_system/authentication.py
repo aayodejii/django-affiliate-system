@@ -1,11 +1,8 @@
 # authentication.py
 import logging
-import uuid
 
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Affiliate, Tenant
 
@@ -13,98 +10,55 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-class TenantAPIKeyAuthentication(BaseAuthentication):
-    """Authentication using tenant API keys"""
+class AffiliateAuthentication(BaseAuthentication):
+    """
+    Simple authentication that identifies affiliates from authenticated users.
+    Uses standard Django/DRF authentication (JWT, Session, etc.)
+    """
 
     def authenticate(self, request):
-        api_key = request.META.get("HTTP_X_API_KEY")
-        if not api_key:
+        # Use Django's standard authentication first
+        if not request.user or not request.user.is_authenticated:
             return None
 
+        # Try to attach affiliate and tenant context
         try:
-            tenant = Tenant.objects.get(api_key=uuid.UUID(api_key), is_active=True)
-            request.tenant = tenant  # Attach tenant to request
-            return (tenant.owner, None)  # Return owner as user
-        except (Tenant.DoesNotExist, ValueError) as e:
-            logger.warning(f"Invalid API key: {api_key}, Error: {e}")
-            raise AuthenticationFailed("Invalid API key")
+            affiliate = (
+                Affiliate.objects.select_related("tenant")
+                .filter(user=request.user, is_active=True)
+                .first()
+            )
 
-    def authenticate_header(self, request):
-        return "X-API-Key"
+            if affiliate:
+                request.affiliate = affiliate
+                request.tenant = affiliate.tenant  # May be None
+                logger.debug(f"Affiliate context set: {affiliate.code}")
 
+        except Exception as e:
+            logger.warning(f"Could not set affiliate context: {e}")
 
-class HybridAuthentication(BaseAuthentication):
-    """Support both JWT (for user auth) and API key (for tenant auth)"""
-
-    def __init__(self):
-        self.jwt_auth = JWTAuthentication()
-        self.api_key_auth = TenantAPIKeyAuthentication()
-
-    def authenticate(self, request):
-        # Try JWT first
-        user_auth = self.jwt_auth.authenticate(request)
-        if user_auth:
-            user, token = user_auth
-            request.user = user
-
-            # Always try to set tenant for affiliate users
-            try:
-                affiliate = Affiliate.objects.filter(user=user).first()
-                if affiliate:
-                    request.tenant = affiliate.tenant
-                    logger.debug(f"Tenant set from user affiliate: {request.tenant}")
-                elif not hasattr(request, "tenant"):
-                    # Optionally set tenant from user's other relationships if needed
-                    request.tenant = getattr(user, "tenant", None)
-            except Exception as e:
-                logger.warning(f"Could not set tenant from user: {e}")
-            return user_auth
-
-        # Fall back to API key
-        tenant_auth = self.api_key_auth.authenticate(request)
-        if tenant_auth:
-            tenant, key = tenant_auth
-            request.user = None  # Explicitly set user to None for API key auth
-            request.tenant = tenant
-            return (None, tenant)  # Return consistent format
-
-        return None
-
-    def authenticate_header(self, request):
-        return self.jwt_auth.authenticate_header(request)
+        # Return the authenticated user
+        return (request.user, None)
 
 
-class StrictHybridAuthentication(BaseAuthentication):
-    """Requires both JWT (user) and API key (tenant) for authentication."""
+class TenantFromSubdomainMixin:
+    """
+    Mixin to extract tenant from subdomain.
+    Can be used with any authentication class.
+    """
 
-    def __init__(self):
-        self.jwt_auth = JWTAuthentication()
-        self.api_key_auth = TenantAPIKeyAuthentication()
+    def set_tenant_from_subdomain(self, request):
+        """Set tenant based on subdomain"""
+        if hasattr(request, "tenant") and request.tenant:
+            return  # Already set
 
-    def authenticate(self, request):
-        # Try JWT authentication (user)
-        user_auth = self.jwt_auth.authenticate(request)
-        if not user_auth:
-            raise AuthenticationFailed("JWT authentication failed (required).")
-
-        # Try API key authentication (tenant)
-        # This will set request.tenant automatically
-        tenant_auth = self.api_key_auth.authenticate(request)
-        if not tenant_auth:
-            raise AuthenticationFailed("API key authentication failed (required).")
-
-        # Both succeeded
-        user, token = user_auth  # JWT user and token
-
-        # The tenant was already set on the request by TenantAPIKeyAuthentication
-        # So we just need to verify it exists
-        if not hasattr(request, "tenant"):
-            raise AuthenticationFailed("Tenant not properly set during authentication")
-
-        logger.debug(f"Hybrid auth succeeded. User: {user.id}, Tenant: {request.tenant.id}")
-
-        return (user, token)  # DRF expects (user, auth)
-
-    def authenticate_header(self, request):
-        # Uses JWT's WWW-Authenticate header (e.g., "Bearer")
-        return self.jwt_auth.authenticate_header(request)
+        host = request.get_host()
+        if "." in host:
+            subdomain = host.split(".")[0]
+            if subdomain and subdomain != "www":
+                try:
+                    tenant = Tenant.objects.get(subdomain=subdomain, is_active=True)
+                    request.tenant = tenant
+                    logger.debug(f"Tenant set from subdomain: {tenant}")
+                except Tenant.DoesNotExist:
+                    logger.debug(f"No tenant found for subdomain: {subdomain}")
