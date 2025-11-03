@@ -130,9 +130,19 @@ class ReferralActionType(enum.Enum):
 class ReferralAction(models.Model):
     """Track all referral actions (clicks, signups, purchases)"""
 
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True)
+    affiliate = models.ForeignKey(
+        Affiliate,
+        on_delete=models.CASCADE,
+        related_name="actions",
+        help_text="Affiliate who gets credit for this action",
+    )
     referral_link = models.ForeignKey(
-        ReferralLink, on_delete=models.CASCADE, related_name="actions"
+        ReferralLink,
+        on_delete=models.CASCADE,
+        related_name="actions",
+        null=True,
+        blank=True,
+        help_text="Optional: Specific campaign link used",
     )
     action_type = models.CharField(
         max_length=20, choices=[(tag.value, tag.name) for tag in ReferralActionType]
@@ -164,14 +174,23 @@ class ReferralAction(models.Model):
     class Meta:
         db_table = "affiliates_referralaction"
         indexes = [
+            models.Index(fields=["affiliate", "action_type"]),
+            models.Index(fields=["affiliate", "is_converted"]),
             models.Index(fields=["referral_link", "action_type"]),
-            models.Index(fields=["tenant", "is_converted"]),
+            models.Index(fields=["is_converted"]),
             models.Index(fields=["timestamp"]),
             models.Index(fields=["session_id"]),
         ]
 
     def __str__(self):
-        return f"{self.action_type} via {self.referral_link.slug}"
+        if self.referral_link:
+            return f"{self.action_type} via {self.referral_link.slug} ({self.affiliate.code})"
+        return f"{self.action_type} via code {self.affiliate.code}"
+
+    @property
+    def tenant(self):
+        """Helper property to access tenant through relationship"""
+        return self.affiliate.tenant
 
 
 class Commission(models.Model):

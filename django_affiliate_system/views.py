@@ -117,7 +117,14 @@ class AffiliateViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def stats(self, request):
-        """Get affiliate statistics for the authenticated user"""
+        """
+        Get affiliate statistics for the authenticated user.
+
+        Query params:
+            - date_from: Start date (ISO format)
+            - date_to: End date (ISO format)
+            - tracking_method: Filter by 'code' or 'link' (optional)
+        """
         try:
             affiliate = Affiliate.objects.get(user=request.user, is_active=True)
         except Affiliate.DoesNotExist:
@@ -135,10 +142,17 @@ class AffiliateViewSet(viewsets.ModelViewSet):
         if date_to := request.query_params.get("date_to"):
             end_date = parse_datetime(date_to) or end_date
 
-        # Get actions for this affiliate in date range
+        # CHANGED: Filter by affiliate directly (covers both code and link tracking)
         actions = ReferralAction.objects.filter(
-            referral_link__affiliate=affiliate, timestamp__range=[start_date, end_date]
+            affiliate=affiliate, timestamp__range=[start_date, end_date]
         )
+
+        # Optional: Filter by tracking method
+        tracking_method = request.query_params.get("tracking_method")
+        if tracking_method == "code":
+            actions = actions.filter(referral_link__isnull=True)
+        elif tracking_method == "link":
+            actions = actions.filter(referral_link__isnull=False)
 
         # Calculate statistics
         stats = {
@@ -148,9 +162,27 @@ class AffiliateViewSet(viewsets.ModelViewSet):
             "total_conversions": actions.filter(is_converted=True).count(),
         }
 
+        # Breakdown by tracking method
+        stats["tracking_breakdown"] = {
+            "code_based": {
+                "clicks": actions.filter(action_type="click", referral_link__isnull=True).count(),
+                "conversions": actions.filter(
+                    is_converted=True, referral_link__isnull=True
+                ).count(),
+            },
+            "link_based": {
+                "clicks": actions.filter(action_type="click", referral_link__isnull=False).count(),
+                "conversions": actions.filter(
+                    is_converted=True, referral_link__isnull=False
+                ).count(),
+            },
+        }
+
         # Calculate conversion rate
         if stats["total_clicks"] > 0:
-            stats["conversion_rate"] = stats["total_conversions"] / stats["total_clicks"] * 100
+            stats["conversion_rate"] = round(
+                stats["total_conversions"] / stats["total_clicks"] * 100, 2
+            )
         else:
             stats["conversion_rate"] = 0
 
@@ -169,12 +201,13 @@ class AffiliateViewSet(viewsets.ModelViewSet):
             actions.filter(is_converted=True).aggregate(total=Sum("conversion_value"))["total"] or 0
         )
 
-        # Top performing links
+        # CHANGED: Top performing links (only for link-based tracking)
         top_links = (
             ReferralLink.objects.filter(affiliate=affiliate)
             .annotate(
                 clicks=Count("actions", filter=Q(actions__action_type="click")),
                 conversions=Count("actions", filter=Q(actions__is_converted=True)),
+                revenue=Sum("actions__conversion_value", filter=Q(actions__is_converted=True)),
             )
             .order_by("-conversions")[:10]
         )
@@ -182,11 +215,28 @@ class AffiliateViewSet(viewsets.ModelViewSet):
         stats["top_links"] = [
             {
                 "slug": link.slug,
+                "campaign_name": link.campaign_name,
                 "clicks": link.clicks,
                 "conversions": link.conversions,
+                "revenue": float(link.revenue or 0),
+                "conversion_rate": (
+                    round(link.conversions / link.clicks * 100, 2) if link.clicks > 0 else 0
+                ),
             }
             for link in top_links
         ]
+
+        # NEW: Show affiliate code stats separately
+        code_actions = actions.filter(referral_link__isnull=True)
+        stats["code_stats"] = {
+            "code": affiliate.code,
+            "clicks": code_actions.filter(action_type="click").count(),
+            "conversions": code_actions.filter(is_converted=True).count(),
+            "revenue": code_actions.filter(is_converted=True).aggregate(
+                total=Sum("conversion_value")
+            )["total"]
+            or 0,
+        }
 
         stats["date_range"] = {
             "start": start_date.isoformat(),
@@ -194,6 +244,76 @@ class AffiliateViewSet(viewsets.ModelViewSet):
         }
 
         return Response(stats)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAffiliateOrTenantOwner])
+    def performance(self, request, pk=None):
+        """
+        Get detailed performance metrics for a specific affiliate.
+        Available to the affiliate themselves or their tenant owner.
+
+        Query params:
+            - date_from: Start date
+            - date_to: End date
+            - group_by: 'day', 'week', 'month' (default: 'day')
+        """
+        affiliate = self.get_object()
+
+        # Get date range
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=30)
+
+        if date_from := request.query_params.get("date_from"):
+            start_date = parse_datetime(date_from) or start_date
+        if date_to := request.query_params.get("date_to"):
+            end_date = parse_datetime(date_to) or end_date
+
+        group_by = request.query_params.get("group_by", "day")
+
+        # Time-series data
+        actions = ReferralAction.objects.filter(
+            affiliate=affiliate, timestamp__range=[start_date, end_date]
+        )
+
+        # Group by time period
+        if group_by == "day":
+            trunc = TruncDay("timestamp")
+        elif group_by == "week":
+            trunc = TruncWeek("timestamp")
+        elif group_by == "month":
+            trunc = TruncMonth("timestamp")
+        else:
+            trunc = TruncDay("timestamp")
+
+        time_series = (
+            actions.annotate(period=trunc)
+            .values("period")
+            .annotate(
+                clicks=Count("id", filter=Q(action_type="click")),
+                conversions=Count("id", filter=Q(is_converted=True)),
+                revenue=Sum("conversion_value", filter=Q(is_converted=True)),
+            )
+            .order_by("period")
+        )
+
+        return Response(
+            {
+                "affiliate_code": affiliate.code,
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                },
+                "group_by": group_by,
+                "time_series": [
+                    {
+                        "period": item["period"].isoformat(),
+                        "clicks": item["clicks"],
+                        "conversions": item["conversions"],
+                        "revenue": float(item["revenue"] or 0),
+                    }
+                    for item in time_series
+                ],
+            }
+        )
 
 
 class ReferralLinkViewSet(viewsets.ModelViewSet):
@@ -254,14 +374,18 @@ class ReferralActionViewSet(viewsets.ReadOnlyModelViewSet):
             tenant = getattr(self.request, "tenant", None)
             if tenant and tenant.owner == user:
                 # Tenant owner sees all actions for their tenant
-                queryset = ReferralAction.objects.filter(tenant=tenant)
+                queryset = ReferralAction.objects.filter(affiliate__tenant=tenant)
             else:
                 # Affiliates see only their own actions
-                queryset = ReferralAction.objects.filter(referral_link__affiliate__user=user)
+                queryset = ReferralAction.objects.filter(affiliate__user=user)
 
         # Apply filters
         if referral_link := self.request.query_params.get("referral_link"):
             queryset = queryset.filter(referral_link_id=referral_link)
+
+        # NEW: Filter by affiliate code
+        if affiliate_code := self.request.query_params.get("affiliate_code"):
+            queryset = queryset.filter(affiliate__code=affiliate_code)
 
         if action_type := self.request.query_params.get("action_type"):
             queryset = queryset.filter(action_type=action_type)
@@ -269,13 +393,30 @@ class ReferralActionViewSet(viewsets.ReadOnlyModelViewSet):
         if is_converted := self.request.query_params.get("is_converted"):
             queryset = queryset.filter(is_converted=is_converted.lower() == "true")
 
-        return queryset.select_related("referral_link", "referral_link__affiliate")
+        # NEW: Filter by tracking method
+        if tracking_method := self.request.query_params.get("tracking_method"):
+            if tracking_method == "code":
+                queryset = queryset.filter(referral_link__isnull=True)
+            elif tracking_method == "link":
+                queryset = queryset.filter(referral_link__isnull=False)
+
+        return queryset.select_related("affiliate", "affiliate__user", "referral_link")
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def track(self, request):
         """
         Public endpoint for tracking events (clicks, conversions, etc.)
-        Accepts: referral_code or referral_slug, event_type, metadata
+
+        Required params:
+            - referral_code (string) OR referral_slug (string)
+            - event_type (string): 'click', 'signup', 'purchase', etc.
+
+        Optional params:
+            - conversion_value (decimal): For purchase events
+            - session_id (string): For multi-touch attribution
+            - use_sessions (boolean): Enable session tracking
+            - attribution_model (string): 'first_click' or 'last_click'
+            - metadata (object): Additional tracking data
         """
         try:
             action = process_tracking_event(

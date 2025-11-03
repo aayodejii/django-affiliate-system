@@ -156,30 +156,37 @@ class ReferralLinkSerializer(serializers.ModelSerializer):
 
 
 class ReferralActionSerializer(serializers.ModelSerializer):
+    affiliate_code = serializers.CharField(source="affiliate.code", read_only=True)
+    affiliate_email = serializers.EmailField(source="affiliate.user.email", read_only=True)
     referral_link_slug = serializers.CharField(source="referral_link.slug", read_only=True)
     affiliate_code = serializers.CharField(source="referral_link.affiliate.code", read_only=True)
+    tracking_method = serializers.SerializerMethodField()
 
     class Meta:
         model = ReferralAction
         fields = [
             "id",
+            "affiliate",
+            "affiliate_code",
+            "affiliate_email",
             "referral_link",
             "referral_link_slug",
-            "affiliate_code",
             "action_type",
+            "tracking_method",
+            "ip_address",
+            "user_agent",
+            "referring_url",
             "timestamp",
+            "metadata",
             "converted_at",
             "conversion_value",
             "is_converted",
             "session_id",
-            "metadata",
         ]
-        read_only_fields = [
-            "timestamp",
-            "referral_link",
-            "converted_at",
-            "session_id",
-        ]
+        read_only_fields = ["id", "timestamp", "affiliate", "referral_link"]
+
+    def get_tracking_method(self, obj):
+        return "link" if obj.referral_link else "code"
 
 
 class CommissionSerializer(serializers.ModelSerializer):
