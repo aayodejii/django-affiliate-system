@@ -75,8 +75,3 @@ def authenticated_client(api_client, user):
     return api_client
 
 
-@pytest.fixture
-def tenant_api_client(api_client, tenant):
-    """Create an API client with tenant API key."""
-    api_client.credentials(HTTP_X_API_KEY=str(tenant.api_key))
-    return api_client

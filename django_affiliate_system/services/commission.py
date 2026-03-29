@@ -1,10 +1,15 @@
 # services/commissions.py
 
+import logging
 from decimal import Decimal
+
 from django.db import transaction
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 
 from django_affiliate_system.models import Commission, CommissionRule
+
+logger = logging.getLogger(__name__)
 
 
 def create_commission(action):
@@ -17,10 +22,7 @@ def create_commission(action):
     Returns:
         Commission instance or None if no applicable rule found
     """
-    # CHANGED: Get affiliate directly from action
     affiliate = action.affiliate
-
-    # CHANGED: Get tenant through affiliate relationship
     tenant = affiliate.tenant
 
     # Find applicable commission rule
@@ -67,12 +69,10 @@ def create_commission(action):
         # No applicable rule found
         return None
 
-    print("conversion value!!!!!!!:", action.conversion_value)
+    logger.debug("Creating commission for conversion value: %s", action.conversion_value)
 
     # Calculate commission amount
     if rule.is_percentage:
-        print("Percentage-based commission rule applied", rule.value)
-        # Percentage-based commission
         amount = (Decimal(action.conversion_value) or 0) * (rule.value / 100)
 
         # Apply min/max limits
@@ -83,8 +83,6 @@ def create_commission(action):
 
         rate = rule.value
     else:
-        print("Flat amount commission rule applied")
-        # Flat amount commission
         amount = rule.value
         rate = 0  # Rate is 0 for flat commissions
 
@@ -279,8 +277,6 @@ def get_commission_summary(affiliate, start_date=None, end_date=None):
     Returns:
         dict with commission summary
     """
-    from django.db.models import Sum, Count, Avg
-
     queryset = Commission.objects.filter(affiliate=affiliate)
 
     if start_date:

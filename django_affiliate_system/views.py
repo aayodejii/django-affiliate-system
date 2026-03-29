@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDay, TruncMonth, TruncWeek
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -13,7 +14,6 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from .models import (
     Affiliate,
@@ -142,7 +142,6 @@ class AffiliateViewSet(viewsets.ModelViewSet):
         if date_to := request.query_params.get("date_to"):
             end_date = parse_datetime(date_to) or end_date
 
-        # CHANGED: Filter by affiliate directly (covers both code and link tracking)
         actions = ReferralAction.objects.filter(
             affiliate=affiliate, timestamp__range=[start_date, end_date]
         )
@@ -201,7 +200,6 @@ class AffiliateViewSet(viewsets.ModelViewSet):
             actions.filter(is_converted=True).aggregate(total=Sum("conversion_value"))["total"] or 0
         )
 
-        # CHANGED: Top performing links (only for link-based tracking)
         top_links = (
             ReferralLink.objects.filter(affiliate=affiliate)
             .annotate(
@@ -226,7 +224,6 @@ class AffiliateViewSet(viewsets.ModelViewSet):
             for link in top_links
         ]
 
-        # NEW: Show affiliate code stats separately
         code_actions = actions.filter(referral_link__isnull=True)
         stats["code_stats"] = {
             "code": affiliate.code,
@@ -383,7 +380,6 @@ class ReferralActionViewSet(viewsets.ReadOnlyModelViewSet):
         if referral_link := self.request.query_params.get("referral_link"):
             queryset = queryset.filter(referral_link_id=referral_link)
 
-        # NEW: Filter by affiliate code
         if affiliate_code := self.request.query_params.get("affiliate_code"):
             queryset = queryset.filter(affiliate__code=affiliate_code)
 
@@ -393,7 +389,6 @@ class ReferralActionViewSet(viewsets.ReadOnlyModelViewSet):
         if is_converted := self.request.query_params.get("is_converted"):
             queryset = queryset.filter(is_converted=is_converted.lower() == "true")
 
-        # NEW: Filter by tracking method
         if tracking_method := self.request.query_params.get("tracking_method"):
             if tracking_method == "code":
                 queryset = queryset.filter(referral_link__isnull=True)
@@ -611,7 +606,7 @@ class ReferralLinkRedirectView(View):
 
         # Track the click
         ReferralAction.objects.create(
-            tenant=referral_link.affiliate.tenant,
+            affiliate=referral_link.affiliate,
             referral_link=referral_link,
             action_type="click",
             ip_address=request.META.get("REMOTE_ADDR"),
@@ -642,18 +637,3 @@ class ReferralLinkRedirectView(View):
 
         return response
 
-
-class SimpleDebugView(APIView):
-    """Simple debug endpoint to test authentication"""
-
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        return Response(
-            {
-                "authenticated": request.user.is_authenticated,
-                "user": str(request.user) if request.user.is_authenticated else None,
-                "tenant": str(getattr(request, "tenant", None)),
-                "affiliate": str(getattr(request, "affiliate", None)),
-            }
-        )

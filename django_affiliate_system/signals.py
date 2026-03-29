@@ -51,7 +51,7 @@ def track_referred_signup(sender, instance, created, **kwargs):
 
     # Create signup conversion action
     action = ReferralAction.objects.create(
-        tenant=affiliate.tenant,
+        affiliate=affiliate,
         referral_link=referral_link,
         action_type="signup",
         ip_address=request.META.get("REMOTE_ADDR"),
@@ -70,7 +70,7 @@ def track_referred_signup(sender, instance, created, **kwargs):
     )
 
     # Create commission if there's a rule for signups
-    from .services.commision import create_commission
+    from .services.commission import create_commission
 
     create_commission(action)
 

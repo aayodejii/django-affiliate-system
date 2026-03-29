@@ -1,5 +1,4 @@
 # tasks.py
-import time
 
 from django.utils import timezone
 
@@ -21,8 +20,11 @@ from .models import Commission, Payout
 @shared_task
 def process_payout(payout_id):
     """
-    Mock payout processing task.
-    Simulates payment through Stripe/PayPal and updates commissions.
+    Process a payout for an affiliate.
+
+    This is a stub — integrate with your payment provider (Stripe, PayPal, etc.)
+    before using in production. Update payout.reference with the external
+    payment ID returned by the provider.
     """
     if not CELERY_AVAILABLE:
         raise ImportError("Celery is required for async tasks")
@@ -35,20 +37,13 @@ def process_payout(payout_id):
     payout.status = "processing"
     payout.save()
 
-    # Simulate processing delay (mock API call)
-    time.sleep(5)
-
     try:
-        # Mock successful payment
-        payout.status = "paid"
-        payout.processed_at = timezone.now()
-        payout.reference = f"mock_pay_{payout.id}"
-        payout.save()
+        # TODO: Replace with real payment provider integration
+        # e.g. stripe.Transfer.create(...) or paypalrestsdk.Payout.create(...)
+        raise NotImplementedError("Payment provider integration not configured")
 
-        # Mark all approved commissions as paid
-        Commission.objects.filter(affiliate=payout.affiliate, status="approved").update(
-            status="paid"
-        )
+    except NotImplementedError:
+        raise
 
     except Exception as e:
         payout.status = "failed"

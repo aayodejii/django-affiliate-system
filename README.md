@@ -1,16 +1,16 @@
 # Django Affiliate System
 
-A flexible, production-ready Django package for managing affiliate marketing programs with referral tracking, commissions, and payouts.
+A flexible, production ready Django package for managing affiliate marketing programs with referral tracking, commissions, and payouts.
 
 ## Features
 
-- 🔗 **Referral Link Management** - Create and track custom referral links
-- 📊 **Detailed Analytics** - Track clicks, conversions, and revenue
-- 💰 **Commission System** - Flexible commission rules (percentage or flat rate)
-- 💳 **Payout Management** - Handle affiliate payouts with multiple methods
-- 🏢 **Optional Multi-Tenancy** - Support multiple platforms with isolated data
-- 🎯 **Attribution Models** - First-click, last-click, or custom attribution
-- 🔒 **Secure & Production-Ready** - Built with Django best practices
+- **Referral Link Management** - Create and track custom referral links
+- **Detailed Analytics** - Track clicks, conversions, and revenue
+- **Commission System** - Flexible commission rules (percentage or flat rate)
+- **Payout Management** - Handle affiliate payouts with multiple methods
+- **Optional Multi-Tenancy** - Support multiple platforms with isolated data
+- **Attribution Models** - First-click, last-click, or custom attribution
+- **Secure & Production-Ready** - Built with Django best practices
 
 ## Installation
 
@@ -75,6 +75,7 @@ MIDDLEWARE = [
 ```python
 # urls.py
 from django.urls import path, include
+from django_affiliate_system.views import ReferralLinkRedirectView
 
 urlpatterns = [
     # ... other urls
@@ -82,7 +83,7 @@ urlpatterns = [
 
     # Referral link redirect handler
     path('r/<slug:slug>/',
-         'django_affiliate_system.views.ReferralLinkRedirectView.as_view(),
+         ReferralLinkRedirectView.as_view(),
          name='referral-redirect'),
 ]
 ```
@@ -362,46 +363,6 @@ coverage run --source='django_affiliate_system' manage.py test
 coverage report
 ```
 
-## Security Considerations
-
-1. **Always use HTTPS in production**
-2. **Set secure cookie settings**:
-   ```python
-   # settings.py
-   SESSION_COOKIE_SECURE = True
-   CSRF_COOKIE_SECURE = True
-   ```
-3. **Implement rate limiting** on tracking endpoints
-4. **Validate referral codes** to prevent abuse
-5. **Use environment variables** for sensitive settings
-
-## Performance Tips
-
-1. **Use database indexes** (already included in models)
-2. **Cache affiliate lookups**:
-
-   ```python
-   from django.core.cache import cache
-
-   affiliate = cache.get(f'affiliate_{code}')
-   if not affiliate:
-       affiliate = Affiliate.objects.get(code=code)
-       cache.set(f'affiliate_{code}', affiliate, 3600)
-   ```
-
-3. **Use select_related/prefetch_related** for queries
-4. **Consider async tasks** for commission calculation:
-
-   ```python
-   # With Celery
-   from celery import shared_task
-
-   @shared_task
-   def process_commission(action_id):
-       action = ReferralAction.objects.get(id=action_id)
-       create_commission(action)
-   ```
-
 ## Troubleshooting
 
 ### Referral codes not being tracked
@@ -439,21 +400,10 @@ Contributions are welcome! Please:
 
 ## License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License.
 
 ## Support
 
-- Documentation: [docs link]
-- Issues: [GitHub issues]
+- Documentation: [Read the full documentation](README.md)
+- Issues: https://github.com/aayodejii/django-affiliate-system/issues
 - Email: aayodeji.f@gmail.com
-
-## Changelog
-
-### 1.0.0
-
-- Initial release
-- Core affiliate tracking
-- Commission system
-- Payout management
-- Optional multi-tenancy
-- Multi-touch attribution

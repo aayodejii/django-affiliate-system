@@ -7,7 +7,7 @@ from django_affiliate_system.models import (
     ReferralLink,
     ReferralSession,
 )
-from django_affiliate_system.services.commision import (
+from django_affiliate_system.services.commission import (
     create_attributed_commission,
     create_commission,
 )
@@ -125,27 +125,3 @@ def process_tracking_event(data, meta, use_sessions=False, attribution_model="la
         create_commission(action)
 
     return action
-
-
-# def create_attributed_commission(action, session):
-#     """
-#     Create commission based on attribution model.
-
-#     For session-based tracking, determines which link/affiliate gets credit
-#     based on first-click or last-click attribution.
-#     """
-#     attribution_model = action.metadata.get("attribution_model", "last_click")
-
-#     if attribution_model == "first_click":
-#         affiliate = session.first_referral_link.affiliate
-#         referral_link = session.first_referral_link
-#     else:  # last_click
-#         affiliate = session.last_referral_link.affiliate
-#         referral_link = session.last_referral_link
-
-#     # Update action with attributed affiliate/link
-#     action.affiliate = affiliate
-#     action.referral_link = referral_link
-#     action.save(update_fields=["affiliate", "referral_link"])
-
-#     return create_commission(action)

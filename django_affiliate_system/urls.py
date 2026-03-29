@@ -9,7 +9,6 @@ from .views import (
     ReferralActionViewSet,
     ReferralLinkRedirectView,
     ReferralLinkViewSet,
-    SimpleDebugView,
     TenantViewSet,
 )
 
@@ -23,15 +22,9 @@ router.register(r"payouts", PayoutViewSet, basename="payouts")
 router.register(r"commission-rules", CommissionRuleViewSet, basename="commission-rules")
 router.register(r"tenants", TenantViewSet, basename="tenants")
 
-# URL patterns
 urlpatterns = [
-    # Router URLs
     path("", include(router.urls)),
-    # Referral link redirect handler (short URL)
     path("r/<slug:slug>/", ReferralLinkRedirectView.as_view(), name="referral-redirect"),
-    # Debug endpoint (for testing authentication)
-    path("debug/", SimpleDebugView.as_view(), name="debug"),
 ]
 
-# Optional: Add app_name for namespacing
 app_name = "django_affiliate_system"
