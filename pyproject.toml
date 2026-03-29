@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "A comprehensive Django affiliate marketing and referral tracking system"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Ayodeji Akenroye", email = "aayodeji.f@gmail.com"}
 ]
@@ -24,7 +24,6 @@ classifiers = [
     "Framework :: Django :: 5.1",
     "Framework :: Django :: 5.2",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -79,7 +78,7 @@ Repository = "https://github.com/aayodejii/django-affiliate-system"
 "Bug Reports" = "https://github.com/aayodejii/django-affiliate-system/issues"
 
 [tool.setuptools.packages.find]
-exclude = ["tests*", "docs*"]
+exclude = ["tests*", "docs*", "example_project*"]
 
 [tool.setuptools]
 include-package-data = true
