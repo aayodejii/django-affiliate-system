@@ -59,7 +59,7 @@ def process_tracking_event(data, meta, use_sessions=False, attribution_model="la
     Returns: ReferralAction instance
     """
     referral_code = data.get("referral_code")
-    referral_slug = data.get("referral_link_slug")
+    referral_slug = data.get("referral_slug")
     event_type = data.get("event_type", "click")
     session_id = data.get("session_id")
 

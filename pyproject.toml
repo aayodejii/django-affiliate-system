@@ -88,7 +88,7 @@ zip-safe = false
 version = {attr = "django_affiliate_system.__version__"}
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "example_project.example_project.settings"
+DJANGO_SETTINGS_MODULE = "django_affiliate_system.test_settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

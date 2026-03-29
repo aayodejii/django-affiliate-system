@@ -113,6 +113,7 @@ class ReferralActionModelTests(TestCase):
     def test_create_click_action(self):
         """Test creating a click action"""
         action = ReferralAction.objects.create(
+            affiliate=self.affiliate,
             referral_link=self.link,
             action_type="click",
             ip_address="192.168.1.1",
@@ -124,6 +125,7 @@ class ReferralActionModelTests(TestCase):
     def test_create_conversion_action(self):
         """Test creating a conversion action"""
         action = ReferralAction.objects.create(
+            affiliate=self.affiliate,
             referral_link=self.link,
             action_type="purchase",
             is_converted=True,
@@ -146,6 +148,7 @@ class CommissionModelTests(TestCase):
             affiliate=self.affiliate, slug="test-link", destination_url="https://example.com"
         )
         self.action = ReferralAction.objects.create(
+            affiliate=self.affiliate,
             referral_link=self.link,
             action_type="purchase",
             is_converted=True,
@@ -511,6 +514,7 @@ class IntegrationTests(TransactionTestCase):
 
         # 4. Track conversion
         action = ReferralAction.objects.create(
+            affiliate=affiliate,
             referral_link=link,
             action_type="purchase",
             is_converted=True,
